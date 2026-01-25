@@ -13,24 +13,21 @@ DuckDuckGo search from Emacs using the `ddgr` command line tool.
 - Navigation shortcuts
 - Open results in `eww` or external browser
 - Support for refreshing and starting new searches
-- Evil-mode keybinding support (optional)
 
 *** Keybindings
 
 In the `*ddgr-results*` buffer:
 
-| Key | Action |
-| --- | --- |
+| Key   | Action                           |
+| ---   | ---                              |
 | `RET` | Open result (using `browse-url`) |
-| `e` | Open result in `eww` |
-| `o` | Open result in default browser |
-| `n` | Move to next result |
-| `p` | Move to previous result |
-| `g` | Refresh current search |
-| `s` | Start a new search |
-| `q` | Quit (close window) |
-
-Evil-mode users can also use `j` and `k` for navigation.
+| `e`   | Open result in `eww`             |
+| `o`   | Open result in default browser   |
+| `n`   | Move to next result              |
+| `p`   | Move to previous result          |
+| `g`   | Refresh current search           |
+| `s`   | Start a new search               |
+| `q`   | Quit (close window)              |
 
 *** Customization
 

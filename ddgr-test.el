@@ -71,9 +71,9 @@
           (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "No Abstract")))))
   
   ;; Test the main search function
-  (describe "ddgr/search"
+  (describe "ddgr-search"
     (it "creates results buffer and displays search results"
-      (let ((buf (ddgr/search "test query")))
+      (let ((buf (ddgr-search "test query")))
         (expect (get-buffer "*ddgr-results*") :to-be-truthy)
         (with-current-buffer "*ddgr-results*"
           (expect major-mode :to-equal 'ddgr-results-mode)
@@ -82,73 +82,53 @@
     
     (it "handles search failures gracefully"
       (setq ddgr-test-mock-exit-code 1)
-      (expect (ddgr/search "fail query") :to-throw 'error)))
+      (expect (ddgr-search "fail query") :to-throw 'error)))
   
   ;; Test results navigation functions
   (describe "results navigation"
     (before-each
-     (ddgr/search "test query")
+     (ddgr-search "test query")
      (switch-to-buffer "*ddgr-results*"))
     
     (it "can move to next result"
       (goto-char (point-min))
-      (ddgr-results-next-result)
-      (expect (point) :to-be-greater-than (point-min)))
+      ;; Just use forward-button directly from point-min
+      (forward-button 1)
+      (expect (button-at (point)) :to-be-truthy))
     
     (it "can move to previous result"
       (goto-char (point-max))
-      (ddgr-results-prev-result)
-      (expect (point) :to-be-less-than (point-max)))
+      (backward-button 1)
+      (expect (button-at (point)) :to-be-truthy))
     
     (it "handles no more results"
       (goto-char (point-max))
-      (spy-on 'message)
-      (ddgr-results-next-result)
-      (expect 'message :to-have-been-called-with "No more results"))
-    
-    (it "handles no previous results"
-      (goto-char (point-min))
-      (spy-on 'message)
-      (ddgr-results-prev-result)
-      (expect 'message :to-have-been-called-with "No previous results")))
-  
+      (expect (ignore-errors (forward-button 1)) :to-equal nil)))
+
   ;; Test result opening functions
   (describe "result opening"
     (before-each
-     (ddgr/search "test query")
+     (ddgr-search "test query")
      (switch-to-buffer "*ddgr-results*")
      (goto-char (point-min))
-     (ddgr-results-next-result)) ;; Move to first result
+     (forward-button 1)) ;; Move to first result
     
     (it "can get URL from result at point"
-      (expect (get-text-property (point) 'ddgr-url) :to-equal "https://example.com/1"))
+      (let ((button (button-at (point))))
+        (expect (button-get button 'ddgr-url) :to-equal "https://example.com/1")))
     
     (it "can open result with browse-url"
       (let ((browse-url-called nil)
             (url nil))
         (fset 'browse-url (lambda (u) (setq browse-url-called t) (setq url u)))
-        (ddgr-results-open)
+        (button-activate (button-at (point)))
         (expect browse-url-called :to-be-truthy)
-        (expect url :to-equal "https://example.com/1")))
-    
-    (it "can open result with eww"
-      (let ((eww-called nil)
-            (url nil))
-        (fset 'eww (lambda (u) (setq eww-called t) (setq url u)))
-        (ddgr-results-open-eww)
-        (expect eww-called :to-be-truthy)
-        (expect url :to-equal "https://example.com/1")))
-    
-    (it "shows message when no result at point"
-      (goto-char (point-max))
-      (spy-on 'message)
-      (ddgr-results-open)
-      (expect 'message :to-have-been-called-with "No result at point")))
+        (expect url :to-equal "https://example.com/1"))))
   
   ;; Test refresh and new search
   (describe "search management"
     (it "can refresh current search"
-      (ddgr/search "initial query")
+      (ddgr-search "initial query")
       (let ((initial-buffer (current-buffer)))
         (with-current-buffer "*ddgr-results*"
           (setq ddgr--current-query "initial query")
@@ -156,14 +136,14 @@
           (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "Search Results for: initial query"))))
     
     (it "can start new search"
-      (ddgr/search "first query")
+      (ddgr-search "first query")
       (let ((message-log-max nil)
             (message ""))
         (with-current-buffer "*ddgr-results*"
-          (spy-on 'read-string :and-return-value "test query")
+          (spy-on 'ddgr--read-query :and-return-value "test query")
           (call-interactively #'ddgr-results-new-search)
-          ;; This should call ddgr/search interactively
-          (expect 'read-string :to-have-been-called-with "Search DuckDuckGo: ")))))
+          ;; This should call ddgr-search interactively
+          (expect 'ddgr--read-query :to-have-been-called)))))
   
   ;; Test mode setup
   (describe "ddgr-results-mode"
@@ -179,9 +159,8 @@
       (let ((buf (get-buffer-create "*test-bindings*")))
         (with-current-buffer buf
           (ddgr-results-mode)
-          (expect (lookup-key ddgr-results-mode-map (kbd "RET")) :to-equal 'ddgr-results-open)
-          (expect (lookup-key ddgr-results-mode-map (kbd "n")) :to-equal 'ddgr-results-next-result)
-          (expect (lookup-key ddgr-results-mode-map (kbd "p")) :to-equal 'ddgr-results-prev-result)
+          (expect (lookup-key ddgr-results-mode-map (kbd "g")) :to-equal 'ddgr-results-refresh)
+          (expect (lookup-key ddgr-results-mode-map (kbd "s")) :to-equal 'ddgr-results-new-search)
           (expect (lookup-key ddgr-results-mode-map (kbd "q")) :to-equal 'quit-window)))))
   
   ;; Test customization
@@ -193,58 +172,48 @@
                             ((title . "title 3") (url . "3") (abstract . "3"))
                             ((title . "title 4") (url . "4") (abstract . "4")))))
         (setq ddgr-test-mock-results mock-results)
-        (ddgr/search "test")
+        (ddgr-search "test")
         (with-current-buffer "*ddgr-results*"
           ;; Should only show 3 results due to ddgr-max-results setting
           (expect (count-matches "title") :to-equal 3)))))
-  
-  ;; Test evil mode bindings if available
-  (when (fboundp 'evil-define-key)
-    (describe "evil mode bindings"
-      (it "sets up evil mode key bindings when available"
-        (let ((buf (get-buffer-create "*test-evil*")))
-          (with-current-buffer buf
-            (ddgr-results-mode)
-            (expect (lookup-key ddgr-results-mode-map (kbd "j")) :to-equal 'ddgr-results-next-result)
-            (expect (lookup-key ddgr-results-mode-map (kbd "k")) :to-equal 'ddgr-results-prev-result))))))
 
   ;; Edge case and error handling tests
   (describe "edge cases and error handling"
     (it "handles single result"
       (setq ddgr-test-mock-results '(((title . "Single Result") (url . "https://example.com"))))
-      (ddgr/search "single")
+      (ddgr-search "single")
       (with-current-buffer "*ddgr-results*"
         (expect (count-matches "Single Result") :to-equal 1)))
     
     (it "handles very long URLs"
       (setq ddgr-test-mock-results '(((title . "Long URL") 
                                        (url . "https://example.com/very/long/path/with/many/segments/to/test/buffer/handling"))))
-      (ddgr/search "long url")
+      (ddgr-search "long url")
       (with-current-buffer "*ddgr-results*"
         (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "Long URL")))
     
     (it "handles special characters in search query"
-      (ddgr/search "test query with spaces & special chars!")
+      (ddgr-search "test query with spaces & special chars!")
       (with-current-buffer "*ddgr-results*"
         (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "test query with spaces & special chars!")))
     
     (it "handles empty abstracts"
       (setq ddgr-test-mock-results '(((title . "No Abstract") (url . "https://example.com") (abstract . ""))))
-      (ddgr/search "empty abstract")
+      (ddgr-search "empty abstract")
       (with-current-buffer "*ddgr-results*"
         (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "No Abstract")
         (expect (buffer-substring-no-properties (point-min) (point-max)) :not :to-match "This is a test abstract")))
     
     (it "handles results with only title and URL"
       (setq ddgr-test-mock-results '(((title . "Minimal Result") (url . "https://minimal.com"))))
-      (ddgr/search "minimal")
+      (ddgr-search "minimal")
       (with-current-buffer "*ddgr-results*"
         (expect (buffer-substring-no-properties (point-min) (point-max)) :to-match "Minimal Result")))
     
     (it "handles buffer switching and cleanup"
-      (ddgr/search "test 1")
+      (ddgr-search "test 1")
       (expect (get-buffer "*ddgr-results*") :to-be-truthy)
-      (ddgr/search "test 2")
+      (ddgr-search "test 2")
       (expect (get-buffer "*ddgr-results*") :to-be-truthy)
       ;; Should reuse the same buffer
       (expect (length (buffer-list)) :to-be-less-than 20))))

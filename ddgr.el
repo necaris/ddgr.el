@@ -1,19 +1,23 @@
-;;; ddgr.el --- DuckDuckGo search from Emacs  -*- lexical-binding: t; -*-
+;;; ddgr.el --- DuckDuckGo search  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011 Free Software Foundation, Inc.
-;; Author: J. R. Hacker <jrh@example.com>
-;; Version: 1.3
-;; Package-Requires: ((emacs "26.1"))
+;; Copyright (C) 2026 Rami Chowdhury
+;; Author: Rami Chowdhury <rami.chowdhury@gmail.com>
+;; Version: 0.1
+;; Package-Requires: ((emacs "27.1"))
 
-;; Keywords: search, duckduckgo
-;; URL: https://github.com/example/ddgr.el
+;; Keywords: comm, duckduckgo, search, web
+;; URL: https://github.com/necaris/ddgr.el
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 
-;; This package provides an interface to DuckDuckGo search using the ddgr command line tool.
-;; To activate it, use M-x ddgr/search
+;; This package provides an interface to DuckDuckGo search using the `ddgr'
+;; command line tool.
 
-;;; ### [Customization] ###
+(require 'button)
+
+;;; Code:
+
 (defgroup ddgr nil
   "DuckDuckGo search via ddgr."
   :group 'external
@@ -24,33 +28,13 @@
   :type 'integer
   :group 'ddgr)
 
-;;; ### [ddgr-results-mode] ###
-(defvar ddgr-results-mode-map (make-sparse-keymap)
+(defvar ddgr-results-mode-map
+  (let ((km (make-sparse-keymap)))
+    (define-key km (kbd "g")   #'ddgr-results-refresh)
+    (define-key km (kbd "s")   #'ddgr-results-new-search)
+    (define-key km (kbd "q")   #'quit-window)
+    km)
   "Keymap for `ddgr-results-mode'.")
-
-;; Standard Emacs bindings
-(define-key ddgr-results-mode-map (kbd "RET") #'ddgr-results-open)
-(define-key ddgr-results-mode-map (kbd "e")   #'ddgr-results-open-eww)
-(define-key ddgr-results-mode-map (kbd "o")   #'ddgr-results-open-browser)
-(define-key ddgr-results-mode-map (kbd "n")   #'ddgr-results-next-result)
-(define-key ddgr-results-mode-map (kbd "p")   #'ddgr-results-prev-result)
-(define-key ddgr-results-mode-map (kbd "g")   #'ddgr-results-refresh)
-(define-key ddgr-results-mode-map (kbd "s")   #'ddgr-results-new-search)
-(define-key ddgr-results-mode-map (kbd "q")   #'quit-window)
-
-;; Evil-mode bindings (for Doom Emacs users)
-(when (fboundp 'evil-define-key)
-  (evil-define-key 'motion ddgr-results-mode-map
-    (kbd "RET") #'ddgr-results-open
-    "e" #'ddgr-results-open-eww
-    "o" #'ddgr-results-open-browser
-    "j" #'ddgr-results-next-result
-    "k" #'ddgr-results-prev-result
-    "n" #'ddgr-results-next-result
-    "p" #'ddgr-results-prev-result
-    "g" #'ddgr-results-refresh
-    "s" #'ddgr-results-new-search
-    "q" #'quit-window))
 
 (define-derived-mode ddgr-results-mode special-mode "ddgr"
   "Major mode for displaying DuckDuckGo search results from ddgr."
@@ -59,20 +43,29 @@
 
 (defvar-local ddgr--current-query nil)
 
+(defun ddgr--read-query ()
+  "Read search query from user."
+  (read-string "Search DuckDuckGo: "))
+
 (defun ddgr--search-api (query)
   "Call ddgr CLI and return parsed JSON results for QUERY."
+  (unless (executable-find "ddgr")
+    (user-error "Executable not found: ddgr!"))
   (let ((results
          (with-temp-buffer
            (let ((exit-code (call-process "ddgr" nil t nil
-                                           "--unsafe" "--np" "--json"
-                                           "-n" (number-to-string ddgr-max-results)
-                                           query)))
+                                          "--unsafe" "--np" "--json"
+                                          "-n" (number-to-string ddgr-max-results)
+                                          query)))
              (if (/= exit-code 0)
-                 (error "ddgr failed: %s" (buffer-string))
+                 (error "Failed call to ddgr: %s" (buffer-string))
                (goto-char (point-min))
-               (json-parse-string (buffer-substring-no-properties (point-min) (point-max))
-                                   :object-type 'alist))))))
+               (json-parse-buffer :object-type 'alist))))))
     results))
+
+(defun ddgr-results-open-url (button)
+  "Open the URL associated with BUTTON."
+  (browse-url (button-get button 'ddgr-url)))
 
 (defun ddgr--render-results (results)
   "Render RESULTS in current buffer."
@@ -80,20 +73,24 @@
     (erase-buffer)
     (insert (propertize (format "Search Results for: %s\n\n" ddgr--current-query)
                         'face 'bold-italic))
-    (seq-doseq (result results)
+    (dolist (result results)
       (let ((title (alist-get 'title result))
             (url (alist-get 'url result))
             (abstract (alist-get 'abstract result)))
-        (insert (propertize title 'face 'link 'ddgr-url url 'help-echo url))
+        (insert-text-button title
+                            'action #'ddgr-results-open-url
+                            'ddgr-url url
+                            'help-echo url
+                            'follow-link t)
         (insert "\n")
         (when (and abstract (not (string-empty-p abstract)))
           (insert (propertize abstract 'face 'font-lock-comment-face) "\n"))
         (insert "\n")))
     (goto-char (point-min))))
 
-(defun ddgr/search (query)
+(defun ddgr-search (query)
   "Search DuckDuckGo for QUERY."
-  (interactive (list (read-string "Search DuckDuckGo: ")))
+  (interactive (list (ddgr--read-query)))
   (let ((results (ddgr--search-api query))
         (buf (get-buffer-create "*ddgr-results*")))
     (with-current-buffer buf
@@ -102,59 +99,16 @@
       (ddgr--render-results results))
     (pop-to-buffer buf)))
 
-;;; ### [Commands] ###
-
-(defun ddgr-results-open ()
-  "Open the result at point."
-  (interactive)
-  (if-let ((url (get-text-property (point) 'ddgr-url)))
-      (browse-url url)
-    (message "No result at point")))
-
-(defun ddgr-results-open-eww ()
-  "Open the result at point in eww."
-  (interactive)
-  (if-let ((url (get-text-property (point) 'ddgr-url)))
-      (eww url)
-    (message "No result at point")))
-
-(defun ddgr-results-open-browser ()
-  "Open the result at point in the default browser."
-  (interactive)
-  (ddgr-results-open))
-
-(defun ddgr-results-next-result ()
-  "Move to the next result."
-  (interactive)
-  (let ((pos (next-single-property-change (point) 'ddgr-url)))
-    (if pos
-        (progn
-          (goto-char pos)
-          ;; If we landed on the end of a property, we might need to find the start of the next one
-          (unless (get-text-property (point) 'ddgr-url)
-            (ddgr-results-next-result)))
-      (message "No more results"))))
-
-(defun ddgr-results-prev-result ()
-  "Move to the previous result."
-  (interactive)
-  (let ((pos (previous-single-property-change (point) 'ddgr-url)))
-    (if pos
-        (progn
-          (goto-char pos)
-          ;; If we landed on a property, but it's not the start, move to the start
-          (let ((start (previous-single-property-change (1+ (point)) 'ddgr-url)))
-            (when start (goto-char (1+ start)))))
-      (message "No previous results"))))
-
 (defun ddgr-results-refresh ()
   "Refresh current search."
   (interactive)
-  (ddgr/search ddgr--current-query))
+  (ddgr-search ddgr--current-query))
 
 (defun ddgr-results-new-search ()
   "Start a fresh search."
   (interactive)
-  (call-interactively #'ddgr/search))
+  (call-interactively #'ddgr-search))
 
 (provide 'ddgr)
+
+;;; ddgr.el ends here
