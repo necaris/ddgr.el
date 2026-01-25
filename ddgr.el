@@ -1,4 +1,29 @@
-;; Web search with ddgr
+;;; ddgr.el --- DuckDuckGo search from Emacs  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2011 Free Software Foundation, Inc.
+;; Author: J. R. Hacker <jrh@example.com>
+;; Version: 1.3
+;; Package-Requires: ((emacs "26.1"))
+
+;; Keywords: search, duckduckgo
+;; URL: https://github.com/example/ddgr.el
+
+;;; Commentary:
+
+;; This package provides an interface to DuckDuckGo search using the ddgr command line tool.
+;; To activate it, use M-x ddgr/search
+
+;;; ### [Customization] ###
+(defgroup ddgr nil
+  "DuckDuckGo search via ddgr."
+  :group 'external
+  :prefix "ddgr-")
+
+(defcustom ddgr-max-results 6
+  "Maximum number of search results to display."
+  :type 'integer
+  :group 'ddgr)
+
 ;;; ### [ddgr-results-mode] ###
 (defvar ddgr-results-mode-map (make-sparse-keymap)
   "Keymap for `ddgr-results-mode'.")
@@ -39,8 +64,9 @@
   (let ((results
          (with-temp-buffer
            (let ((exit-code (call-process "ddgr" nil t nil
-                                          "--unsafe" "--np" "--json"
-                                          query)))
+                                           "--unsafe" "--np" "--json"
+                                           "-n" (number-to-string ddgr-max-results)
+                                           query)))
              (if (/= exit-code 0)
                  (error "ddgr failed: %s" (buffer-string))
                (goto-char (point-min))

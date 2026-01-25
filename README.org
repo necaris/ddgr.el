@@ -1,0 +1,84 @@
+* ddgr.el
+
+DuckDuckGo search from Emacs using the `ddgr` command line tool.
+
+** Functionality
+
+`ddgr.el` allows you to perform DuckDuckGo searches directly from Emacs and view the results in a dedicated buffer.
+
+*** Features
+- Interactive search prompt
+- Display results with titles, URLs, and abstracts
+- Clickable links (or use RET)
+- Navigation shortcuts
+- Open results in `eww` or external browser
+- Support for refreshing and starting new searches
+- Evil-mode keybinding support (optional)
+
+*** Keybindings
+
+In the `*ddgr-results*` buffer:
+
+| Key | Action |
+| --- | --- |
+| `RET` | Open result (using `browse-url`) |
+| `e` | Open result in `eww` |
+| `o` | Open result in default browser |
+| `n` | Move to next result |
+| `p` | Move to previous result |
+| `g` | Refresh current search |
+| `s` | Start a new search |
+| `q` | Quit (close window) |
+
+Evil-mode users can also use `j` and `k` for navigation.
+
+*** Customization
+
+You can customize the maximum number of results displayed:
+
+#+BEGIN_SRC emacs-lisp
+(setq ddgr-max-results 10) ;; Default is 6
+#+END_SRC
+
+** Quick Start
+
+1.  **Install `ddgr`**: Ensure the `ddgr` command line tool is installed and available in your `PATH`.
+    - https://github.com/jarun/ddgr
+
+2.  **Install `ddgr.el`**:
+    - Clone this repository.
+    - Add it to your `load-path`.
+    - `(require 'ddgr)`
+
+3.  **Usage**:
+    - Run `M-x ddgr/search`
+    - Enter your search query.
+    - Browse results in the `*ddgr-results*` buffer.
+
+** Testing
+
+*** Prerequisites
+
+You need [[https://github.com/cask/cask][Cask]] installed to manage dependencies and run tests.
+
+*** Installation
+
+Install the dependencies:
+
+#+BEGIN_SRC sh
+cask install
+#+END_SRC
+
+*** Running Tests
+
+Run the test suite using Cask and Buttercup:
+
+#+BEGIN_SRC sh
+cask exec buttercup -L .
+#+END_SRC
+
+To run tests with a full traceback on failure:
+
+#+BEGIN_SRC sh
+cask exec buttercup -L . --traceback full
+#+END_SRC
