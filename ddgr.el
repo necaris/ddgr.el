@@ -73,19 +73,19 @@
     (erase-buffer)
     (insert (propertize (format "Search Results for: %s\n\n" ddgr--current-query)
                         'face 'bold-italic))
-    (dolist (result results)
-      (let ((title (alist-get 'title result))
-            (url (alist-get 'url result))
-            (abstract (alist-get 'abstract result)))
-        (insert-text-button title
-                            'action #'ddgr-results-open-url
-                            'ddgr-url url
-                            'help-echo url
-                            'follow-link t)
-        (insert "\n")
-        (when (and abstract (not (string-empty-p abstract)))
-          (insert (propertize abstract 'face 'font-lock-comment-face) "\n"))
-        (insert "\n")))
+    (cl-loop for result across results do
+             (let ((title (alist-get 'title result))
+                   (url (alist-get 'url result))
+                   (abstract (alist-get 'abstract result)))
+               (insert-text-button title
+                                   'action #'ddgr-results-open-url
+                                   'ddgr-url url
+                                   'help-echo url
+                                   'follow-link t)
+               (insert "\n")
+               (when (and abstract (not (string-empty-p abstract)))
+                 (insert (propertize abstract 'face 'font-lock-comment-face) "\n"))
+               (insert "\n")))
     (goto-char (point-min))))
 
 (defun ddgr-search (query)
